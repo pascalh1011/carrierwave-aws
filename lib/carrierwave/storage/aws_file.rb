@@ -64,6 +64,8 @@ module CarrierWave
       end
 
       def authenticated_url(options = {})
+	raise 'CarrierWave.aws_allow_authenticated_urls must be true to read authenticated URLs' unless uploader.aws_allow_authenticated_urls == true
+
         file.url_for(:read, { expires: uploader.aws_authenticated_url_expiration }.merge(options)).to_s
       end
 
