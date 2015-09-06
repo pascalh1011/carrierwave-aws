@@ -19,6 +19,7 @@ module CarrierWave
       end
 
       def delete
+	raise 'Unsafe path!' unless @path =~ /\/[^\/]+\.[\w]+$/
         file.delete
       end
 
