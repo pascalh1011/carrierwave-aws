@@ -1,4 +1,6 @@
 source 'https://rubygems.org'
 
-# Specify your gem's dependencies in carrierwave-aws-sdk.gemspec
 gemspec
+
+gem 'coveralls', '~> 0.8.19', require: false
+gem 'rubocop', '~> 0.47.1', require: false

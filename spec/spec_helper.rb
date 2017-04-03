@@ -1,12 +1,25 @@
 require 'carrierwave'
 require 'carrierwave-aws'
+require 'securerandom'
+
+STORE_DIR = ENV['TRAVIS_JOB_NUMBER'] || SecureRandom.hex(5)
 
 def source_environment_file!
-  return unless File.exists?('.env')
+  return unless File.exist?('.env')
 
   File.readlines('.env').each do |line|
-    values = line.split('=')
-    ENV[values.first] = values.last.chomp
+    key, value = line.split('=')
+    ENV[key] = value.chomp
+  end
+end
+
+FeatureUploader = Class.new(CarrierWave::Uploader::Base) do
+  def store_dir
+    STORE_DIR
+  end
+
+  def filename
+    'image.png'
   end
 end
 
@@ -29,15 +42,16 @@ RSpec.configure do |config|
   Kernel.srand config.seed
 
   config.before(:all, type: :feature) do
-    CarrierWave.configure do |config|
-      config.storage    = :aws
-      config.aws_bucket = ENV['S3_BUCKET_NAME']
-      config.aws_acl    = :public_read
+    CarrierWave.configure do |cw_config|
+      cw_config.storage       = :aws
+      cw_config.cache_storage = :aws
+      cw_config.aws_bucket    = ENV['S3_BUCKET_NAME']
+      cw_config.aws_acl       = :'public-read'
 
-      config.aws_credentials = {
+      cw_config.aws_credentials = {
         access_key_id:     ENV['S3_ACCESS_KEY'],
         secret_access_key: ENV['S3_SECRET_ACCESS_KEY'],
-        region:            ENV['S3_REGION']
+        region:            ENV['AWS_REGION']
       }
     end
   end

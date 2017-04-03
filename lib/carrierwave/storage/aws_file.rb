@@ -1,72 +1,86 @@
+# frozen_string_literal: true
+
 module CarrierWave
   module Storage
     class AWSFile
-      attr_writer :content_type
-      attr_reader :uploader, :connection, :path
+      attr_writer :file
+      attr_accessor :uploader, :connection, :path, :aws_options
+
+      delegate :content_type, :exists?, :size, to: :file
 
       def initialize(uploader, connection, path)
-        @uploader   = uploader
-        @connection = connection
-        @path       = path
+        @uploader    = uploader
+        @connection  = connection
+        @path        = path
+        @aws_options = AWSOptions.new(uploader)
       end
 
-      def attributes
-        file.head.data
+      def file
+        @file ||= bucket.object(path)
       end
 
-      def content_type
-        @content_type || file.content_type
-      end
+      alias to_file file
 
       def delete
 	raise 'Unsafe path!' unless @path =~ /\/[^\/]+\.[\w]+$/
-        file.delete
+        file.delete   
+      end
+
+      def attributes
+        file.data.to_h
       end
 
       def extension
-        path.split('.').last
-      end
-
-      def exists?
-        file.exists?
+        elements = path.split('.')
+        elements.last if elements.size > 1
       end
 
       def filename(options = {})
-        if file_url = url(options)
-          URI.decode(file_url.split('?').first).gsub(/.*\/(.*?$)/, '\1')
-        end
+        file_url = url(options)
+
+        CarrierWave::Support::UriFilename.filename(file_url) if file_url
       end
 
       def read
-        file.read(uploader_read_options)
-      end
-
-      def size
-        file.content_length
+        read_options = aws_options.read_options
+        if block_given?
+          file.get(read_options) { |chunk| yield chunk }
+          nil
+        else
+          file.get(read_options).body.read
+        end
       end
 
       def store(new_file)
-        @file = bucket.objects[path].write(uploader_write_options(new_file))
-
-        true
-      end
-
-      def to_file
-        file
-      end
-
-      def url(options = {})
-        if uploader.aws_acl.to_s != 'public_read'
-          authenticated_url(options)
+        if new_file.is_a?(self.class)
+          new_file.move_to(path)
         else
-          public_url
+          file.put(aws_options.write_options(new_file))
         end
+      end
+
+      def copy_to(new_path)
+        bucket.object(new_path).copy_from(
+          copy_source: "#{bucket.name}/#{file.key}",
+          acl: uploader.aws_acl
+        )
+      end
+
+      def move_to(new_path)
+        file.move_to(
+          "#{bucket.name}/#{new_path}",
+          acl: uploader.aws_acl
+        )
       end
 
       def authenticated_url(options = {})
 	raise 'CarrierWave.aws_allow_authenticated_urls must be true to read authenticated URLs' unless uploader.aws_allow_authenticated_urls == true
 
-        file.url_for(:read, { expires: uploader.aws_authenticated_url_expiration }.merge(options)).to_s
+	file.presigned_url(:get, aws_options.expiration_options(options))
+      end
+
+      def signed_url(options = {})
+        signer.call(public_url.dup, options)
       end
 
       def public_url
@@ -77,42 +91,24 @@ module CarrierWave
         end
       end
 
-      def copy_to(new_path)
-        file.copy_to(bucket.objects[new_path], uploader_copy_options)
-      end
-
-      def uploader_read_options
-        uploader.aws_read_options || {}
-      end
-
-      def uploader_write_options(new_file)
-        aws_attributes    = uploader.aws_attributes    || {}
-        aws_write_options = uploader.aws_write_options || {}
-
-        { acl:          uploader.aws_acl,
-          content_type: new_file.content_type,
-          file:         new_file.path
-        }.merge(aws_attributes).merge(aws_write_options)
-      end
-
-      def uploader_copy_options
-        aws_write_options = uploader.aws_write_options || {}
-
-        storage_options = aws_write_options.select do |key,_|
-          [:reduced_redundancy, :storage_class, :server_side_encryption].include?(key)
+      def url(options = {})
+        if signer
+          signed_url(options)
+        elsif uploader.aws_acl.to_s != 'public-read'
+          authenticated_url(options)
+        else
+          public_url
         end
-
-        { acl: uploader.aws_acl }.merge(storage_options)
       end
 
       private
 
       def bucket
-        @bucket ||= connection.buckets[uploader.aws_bucket]
+        @bucket ||= connection.bucket(uploader.aws_bucket)
       end
 
-      def file
-        @file ||= bucket.objects[path]
+      def signer
+        uploader.aws_signer
       end
     end
   end

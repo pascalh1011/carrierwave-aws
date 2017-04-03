@@ -1,8 +1,37 @@
-## Version 0.7.1 2015-07-21
+## Version 1.1.0 2017-02-24
 
-* Fix: Always compare the `aws_acl` as a string during url generation. This
-  prevents unexpected authenticated url generation when the acl type has a
-  mismatch.
+* Added: Enable using AWS for cache storage, making it easy to do direct file
+  uploads. [Fabian Schwahn]
+* Added: Block support for reading from AWS files. This prevents dumping the
+  entire object into memory, which is a problem with large objects. [Thomas Scholz]
+* Fixed: Duplicate the `public_url` before signing. All of the strings are
+  frozen, and some cloud signing methods attempt to mutate the url.
+
+## Version 1.0.2 2016-09-26
+
+* Fixed: Use `Aws.eager_load` to bypass autoloading for the `S3` resource. This
+  prevents a race condition in multi threaded environments where an undefined
+  error is raised for `Aws::S3::Resource` on any request that loads an uploaded
+  file.
+
+## Version 1.0.1 2016-05-13
+
+* Fixed: The `copy_to` method of `AWS::File` now uses the same `aws_acl`
+  configuration used on original uploads so ACL on copied files matches original
+  files. [Olivier Lacan]
+
+## Version 1.0.0 2015-09-18
+
+* Added: ACL options are verified when they are set, and coerced into usable
+  values when possible.
+* Added: Specify an `aws_signer` lambda for use signing authenticated content
+  served through services like CloudFront.
+
+## Version 1.0.0-rc.1 2015-07-02
+
+* Continues where 0.6.0 left off. This wraps AWS-SDK v2 and all of the breaking
+  changes that contains. Please see the specific breaking change notes contained
+  in `0.6.0` below.
 
 ## Version 0.7.0 2015-07-02
 
